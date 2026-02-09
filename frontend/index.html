@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGI 经济冲击模拟器 - Workers 版</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e4e4e4;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        header { text-align: center; padding: 30px 0; border-bottom: 2px solid #e94560; margin-bottom: 30px; }
+        h1 { font-size: 2.5rem; background: linear-gradient(90deg, #e94560, #ff6b6b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { color: #888; font-size: 1.1rem; }
+        .main-grid { display: grid; grid-template-columns: 320px 1fr; gap: 25px; margin-bottom: 30px; }
+        @media (max-width: 1000px) { .main-grid { grid-template-columns: 1fr; } }
+        
+        .control-panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .panel-title { font-size: 1.3rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .panel-title::before { content: "⚙️"; }
+        .control-group { margin-bottom: 22px; }
+        .control-label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
+        .control-value { color: #e94560; font-weight: bold; }
+        input[type="range"] {
+            width: 100%; height: 8px; border-radius: 4px;
+            background: #2d2d44; outline: none; -webkit-appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 20px; height: 20px;
+            border-radius: 50%; background: #e94560;
+            cursor: pointer; box-shadow: 0 0 10px rgba(233,69,96,0.5);
+        }
+        .btn {
+            width: 100%; padding: 14px; border: none; border-radius: 10px;
+            font-size: 1rem; font-weight: 600; cursor: pointer;
+            transition: all 0.3s; margin-bottom: 12px;
+        }
+        .btn-primary { background: linear-gradient(90deg, #e94560, #ff6b6b); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(233,69,96,0.4); }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: #e4e4e4; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .api-status {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .api-status.connected { background: rgba(76, 175, 80, 0.1); border-color: rgba(76, 175, 80, 0.3); }
+        .api-status.error { background: rgba(244, 67, 54, 0.1); border-color: rgba(244, 67, 54, 0.3); }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+        @media (max-width: 800px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px; padding: 20px;
+            text-align: center; border: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat-value { font-size: 2rem; font-weight: bold; margin-bottom: 5px; }
+        .stat-label { font-size: 0.85rem; color: #888; }
+        .stat-trend { font-size: 0.8rem; margin-top: 5px; }
+        .trend-up { color: #4ade80; }
+        .trend-down { color: #f87171; }
+        
+        .charts-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        @media (max-width: 800px) { .charts-container { grid-template-columns: 1fr; } }
+        .chart-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px; padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .chart-title { font-size: 1.1rem; margin-bottom: 15px; }
+        .chart-wrapper { position: relative; height: 250px; }
+        
+        .event-log {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px; padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            max-height: 300px; overflow-y: auto;
+        }
+        .log-entry { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.9rem; }
+        .log-time { color: #e94560; font-weight: bold; margin-right: 10px; }
+        .log-agi { color: #fbbf24; }
+        .log-policy { color: #60a5fa; }
+        .log-crash { color: #ef4444; }
+        .log-stable { color: #4ade80; }
+        
+        .loading { 
+            display: inline-block; width: 20px; height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%; border-top-color: #e94560;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 AGI 经济冲击模拟器</h1>
+            <p class="subtitle">Cloudflare Workers 后端版 - 10,000 Agent 实时计算</p>
+        </header>
+        
+        <div class="main-grid">
+            <div class="control-panel">
+                <h2 class="panel-title">参数控制</h2>
+                
+                <div class="api-status" id="apiStatus">
+                    <span class="loading"></span>
+                    正在连接 Workers API...
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Agent数量</span>
+                        <span class="control-value" id="nAgentsVal">1000</span>
+                    </div>
+                    <input type="range" id="nAgents" min="100" max="10000" value="1000" step="100">
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>AGI生产力提升</span>
+                        <span class="control-value" id="agiBoostVal">500%</span>
+                    </div>
+                    <input type="range" id="agiBoost" min="100" max="1000" value="500" step="50">
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>羊群效应强度</span>
+                        <span class="control-value" id="herdEffectVal">50%</span>
+                    </div>
+                    <input type="range" id="herdEffect" min="0" max="100" value="50">
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>UBI金额</span>
+                        <span class="control-value" id="ubiVal">80</span>
+                    </div>
+                    <input type="range" id="ubi" min="0" max="200" value="80">
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>算力税率</span>
+                        <span class="control-value" id="computeTaxVal">60%</span>
+                    </div>
+                    <input type="range" id="computeTax" min="0" max="100" value="60">
+                </div>
+                
+                <button class="btn btn-primary" id="startBtn" onclick="startSimulation()">🚀 开始模拟</button>
+                <button class="btn btn-secondary" onclick="resetSimulation()">🔄 重置</button>
+                <button class="btn btn-secondary" id="agiBtn" onclick="deployAGI()" disabled>⚡ 部署AGI</button>
+            </div>
+            
+            <div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="giniValue" style="color: #e94560;">-</div>
+                        <div class="stat-label">基尼系数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="velocityValue" style="color: #60a5fa;">-</div>
+                        <div class="stat-label">货币流通速度</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="workerHappiness" style="color: #4ade80;">-</div>
+                        <div class="stat-label">工人幸福度</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stepValue" style="color: #fbbf24;">0</div>
+                        <div class="stat-label">模拟步数</div>
+                    </div>
+                </div>
+                
+                <div class="charts-container">
+                    <div class="chart-card">
+                        <h3 class="chart-title">📊 基尼系数演变</h3>
+                        <div class="chart-wrapper"><canvas id="giniChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">💰 货币流通速度</h3>
+                        <div class="chart-wrapper"><canvas id="velocityChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">😊 幸福度对比</h3>
+                        <div class="chart-wrapper"><canvas id="happinessChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-title">📈 财富分布</h3>
+                        <div class="chart-wrapper"><canvas id="wealthChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="event-log" id="eventLog">
+            <h3 style="margin-bottom: 15px;">📜 系统事件日志</h3>
+            <div class="log-entry">
+                <span class="log-time">Info</span>
+                <span>等待开始模拟...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API 配置
+        const API_URL = 'https://agi-economy-simulator-api.zyi-info.workers.dev';
+        // const API_URL = 'http://localhost:8787'; // 本地开发
+        
+        let simulation = { running: false, step: 0, agiDeployed: false };
+        let charts = {};
+        let apiConnected = false;
+        
+        // 检查 API 连接
+        async function checkAPI() {
+            try {
+                const response = await fetch(API_URL);
+                if (response.ok) {
+                    apiConnected = true;
+                    document.getElementById('apiStatus').className = 'api-status connected';
+                    document.getElementById('apiStatus').innerHTML = '✅ Workers API 已连接';
+                }
+            } catch (e) {
+                document.getElementById('apiStatus').className = 'api-status error';
+                document.getElementById('apiStatus').innerHTML = '❌ API 连接失败，请刷新重试';
+            }
+        }
+        
+        // 初始化图表
+        function initCharts() {
+            const chartConfig = {
+                type: 'line',
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        legend: { labels: { color: '#e4e4e4', font: { size: 11 } } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#888', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#888', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            };
+            
+            charts.gini = new Chart(document.getElementById('giniChart'), {
+                ...chartConfig,
+                data: { labels: [], datasets: [{ label: '基尼系数', data: [], borderColor: '#e94560', backgroundColor: 'rgba(233,69,96,0.1)', fill: true, tension: 0.4 }] }
+            });
+            
+            charts.velocity = new Chart(document.getElementById('velocityChart'), {
+                ...chartConfig,
+                data: { labels: [], datasets: [{ label: '流通速度', data: [], borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.1)', fill: true, tension: 0.4 }] }
+            });
+            
+            charts.happiness = new Chart(document.getElementById('happinessChart'), {
+                ...chartConfig,
+                data: { labels: [], datasets: [
+                    { label: '工人', data: [], borderColor: '#3b82f6', fill: false },
+                    { label: '资本家', data: [], borderColor: '#f59e0b', fill: false }
+                ]}
+            });
+            
+            charts.wealth = new Chart(document.getElementById('wealthChart'), {
+                type: 'bar',
+                options: { ...chartConfig.options, plugins: { legend: { display: false } } },
+                data: { labels: ['工人', '资本家'], datasets: [{ label: '平均财富', data: [0, 0], backgroundColor: ['#3b82f6', '#f59e0b'] }] }
+            });
+        }
+        
+        // 开始模拟
+        async function startSimulation() {
+            if (simulation.running) return;
+            
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span> 初始化中...';
+            
+            const params = {
+                nAgents: parseInt(document.getElementById('nAgents').value),
+                agiBoost: parseInt(document.getElementById('agiBoost').value) / 100,
+                herdEffect: parseInt(document.getElementById('herdEffect').value) / 100,
+                ubi: parseInt(document.getElementById('ubi').value),
+                computeTax: parseInt(document.getElementById('computeTax').value) / 100
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/api/simulate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params)
+                });
+                
+                const data = await response.json();
+                
+                simulation.running = true;
+                simulation.agiDeployed = false;
+                updateDisplay(data);
+                addLog('✅ 模拟已启动，Workers 后端正在计算...', 'log-stable');
+                
+                btn.innerHTML = '⏸️ 运行中...';
+                document.getElementById('agiBtn').disabled = false;
+                
+                // 开始自动运行
+                runLoop();
+                
+            } catch (e) {
+                addLog('❌ 启动失败: ' + e.message, 'log-crash');
+                btn.disabled = false;
+                btn.innerHTML = '🚀 开始模拟';
+            }
+        }
+        
+        // 运行循环
+        async function runLoop() {
+            if (!simulation.running) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/step`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ steps: 10 })
+                });
+                
+                const data = await response.json();
+                updateDisplay(data);
+                
+                // 显示事件
+                if (data.events) {
+                    data.events.forEach(e => {
+                        addLog(e.message, e.type === 'warning' ? 'log-crash' : 'log-stable');
+                    });
+                }
+                
+                // 提示部署 AGI
+                if (data.stats.step > 50 && !simulation.agiDeployed && !simulation.agiPrompted) {
+                    addLog('💡 提示：可以尝试部署AGI观察经济变化', 'log-policy');
+                    simulation.agiPrompted = true;
+                }
+                
+            } catch (e) {
+                addLog('❌ 运行错误: ' + e.message, 'log-crash');
+            }
+            
+            setTimeout(runLoop, 500);
+        }
+        
+        // 部署 AGI
+        async function deployAGI() {
+            if (!simulation.running || simulation.agiDeployed) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/step`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ steps: 1, deployAGI: true })
+                });
+                
+                const data = await response.json();
+                simulation.agiDeployed = true;
+                document.getElementById('agiBtn').innerHTML = '✅ AGI已部署';
+                addLog('⚡ AGI已部署！生产力提升 ' + document.getElementById('agiBoost').value + '%', 'log-agi');
+                updateDisplay(data);
+                
+            } catch (e) {
+                addLog('❌ AGI部署失败', 'log-crash');
+            }
+        }
+        
+        // 重置
+        async function resetSimulation() {
+            simulation.running = false;
+            simulation.agiDeployed = false;
+            simulation.agiPrompted = false;
+            
+            try {
+                await fetch(`${API_URL}/api/reset`, { method: 'POST' });
+            } catch (e) {}
+            
+            // 清空图表
+            Object.values(charts).forEach(chart => {
+                chart.data.labels = [];
+                chart.data.datasets.forEach(ds => ds.data = []);
+                chart.update();
+            });
+            
+            document.getElementById('giniValue').textContent = '-';
+            document.getElementById('velocityValue').textContent = '-';
+            document.getElementById('workerHappiness').textContent = '-';
+            document.getElementById('stepValue').textContent = '0';
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').innerHTML = '🚀 开始模拟';
+            document.getElementById('agiBtn').disabled = true;
+            document.getElementById('agiBtn').innerHTML = '⚡ 部署AGI';
+            
+            document.getElementById('eventLog').innerHTML = '<h3 style="margin-bottom: 15px;">📜 系统事件日志</h3>';
+            addLog('系统已重置', '');
+        }
+        
+        // 更新显示
+        function updateDisplay(data) {
+            if (!data.stats) return;
+            
+            const s = data.stats;
+            document.getElementById('giniValue').textContent = s.gini.toFixed(2);
+            document.getElementById('velocityValue').textContent = s.velocity.toFixed(2);
+            document.getElementById('workerHappiness').textContent = s.workerHappiness.toFixed(2);
+            document.getElementById('stepValue').textContent = s.step;
+            
+            // 更新图表
+            if (data.history) {
+                charts.gini.data.labels = data.history.steps;
+                charts.gini.data.datasets[0].data = data.history.gini;
+                charts.gini.update('none');
+                
+                charts.velocity.data.labels = data.history.steps;
+                charts.velocity.data.datasets[0].data = data.history.velocity;
+                charts.velocity.update('none');
+                
+                charts.happiness.data.labels = data.history.steps;
+                charts.happiness.data.datasets[0].data = data.history.workerHappiness;
+                charts.happiness.data.datasets[1].data = data.history.capitalistHappiness;
+                charts.happiness.update('none');
+                
+                charts.wealth.data.datasets[0].data = [s.avgWorkerWealth, s.avgCapitalistWealth];
+                charts.wealth.update('none');
+            }
+        }
+        
+        // 添加日志
+        function addLog(message, className) {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">Step ${document.getElementById('stepValue').textContent}</span><span class="${className}">${message}</span>`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        // 滑块事件
+        ['nAgents', 'agiBoost', 'herdEffect', 'ubi', 'computeTax'].forEach(id => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                let suffix = id === 'nAgents' || id === 'ubi' ? '' : '%';
+                if (id === 'agiBoost') suffix = '%';
+                document.getElementById(id + 'Val').textContent = e.target.value + suffix;
+            });
+        });
+        
+        // 初始化
+        window.onload = () => {
+            initCharts();
+            checkAPI();
+        };
+    </script>
+</body>
+</html>

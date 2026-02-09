@@ -1,0 +1,13 @@
+name = "agi-economy-simulator-api"
+main = "src/index.js"
+compatibility_date = "2026-02-09"
+
+# 如果需要 D1 数据库
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "agi-sim-db"
+# database_id = "your-db-id"
+
+# 环境变量
+[vars]
+API_VERSION = "1.0"
